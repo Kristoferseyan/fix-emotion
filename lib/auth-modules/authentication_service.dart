@@ -6,6 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthenticationService {
   final SupabaseClient client = Supabase.instance.client;
 
+  // Get the current user's ID
+  String? getCurrentUserId() {
+    return client.auth.currentUser?.id;
+  }
+
   // Sign out the user
   Future<void> signOut() async {
     await client.auth.signOut();
