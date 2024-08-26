@@ -6,17 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthenticationService {
   final SupabaseClient client = Supabase.instance.client;
 
-  // Get the current user's ID
-  String? getCurrentUserId() {
-    return client.auth.currentUser?.id;
-  }
-
-  // Sign out the user
-  Future<void> signOut() async {
-    await client.auth.signOut();
-    await GoogleSignIn().signOut();
-    await removeUserData();
-  }
+  // Authentication Methods
+  // ----------------------
 
   // Sign in with Google
   Future<AuthResponse> signInWithGoogle() async {
@@ -52,6 +43,7 @@ class AuthenticationService {
     return response;
   }
 
+  // Sign in with Username and Password
   Future<Map<String, dynamic>?> signInWithUsernameAndPassword(String username, String password) async {
     final response = await client
         .from('users')
@@ -72,6 +64,56 @@ class AuthenticationService {
     }
   }
 
+  // Sign out the user
+  Future<void> signOut() async {
+    await client.auth.signOut();
+    await GoogleSignIn().signOut();
+    await removeUserData();
+  }
+
+  // User Management Methods
+  // -----------------------
+
+  // Get the current user's ID
+  String? getCurrentUserId() {
+    return client.auth.currentUser?.id;
+  }
+
+  // Delete the user's account
+  Future<void> deleteUser() async {
+    final userId = getCurrentUserId();
+    if (userId != null) {
+      final response = await client
+          .from('users')
+          .delete()
+          .eq('id', userId);
+
+      if (response.error != null) {
+        throw AuthException('Failed to delete user: ${response.error!.message}');
+      } else {
+        await signOut();
+      }
+    } else {
+      throw AuthException('No user is currently signed in.');
+    }
+  }
+
+  // Delete tracking data for a user
+  Future<void> deleteTrackingData(String userId) async {
+    final response = await client
+        .from('emotion_tracking')
+        .delete()
+        .eq('user_id', userId);
+
+    if (response != null) {
+      throw AuthException('Failed to delete tracking data: ${response.error!.message}');
+    }
+  }
+
+  // User Data Management Methods
+  // ----------------------------
+
+  // Save user data locally
   Future<void> saveUserData(String userId, String? name, String email) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setString('userId', userId);
@@ -79,6 +121,7 @@ class AuthenticationService {
     prefs.setString('userEmail', email);
   }
 
+  // Get user data from local storage
   Future<Map<String, String>?> getUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? userId = prefs.getString('userId');
@@ -94,6 +137,7 @@ class AuthenticationService {
     return null;
   }
 
+  // Remove user data from local storage
   Future<void> removeUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.remove('userId');
@@ -101,10 +145,18 @@ class AuthenticationService {
     prefs.remove('userEmail');
   }
 
+  // Authentication Status Methods
+  // -----------------------------
+
+  // Check if the user is authenticated
   bool isAuthenticated() {
     return client.auth.currentUser != null;
   }
 
+  // Credential Management Methods
+  // -----------------------------
+
+  // Load saved credentials
   Future<Map<String, String>?> loadSavedCredentials() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('rememberMe') ?? false) {
@@ -116,6 +168,7 @@ class AuthenticationService {
     return null;
   }
 
+  // Save credentials for future logins
   Future<void> saveCredentials(String username, String password) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setBool('rememberMe', true);
@@ -123,6 +176,7 @@ class AuthenticationService {
     prefs.setString('password', password);
   }
 
+  // Remove saved credentials
   Future<void> removeCredentials() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.remove('rememberMe');
@@ -131,6 +185,7 @@ class AuthenticationService {
   }
 }
 
+// Custom Exception Class for Authentication Errors
 class AuthException implements Exception {
   final String message;
   AuthException(this.message);
