@@ -74,6 +74,22 @@ class AuthenticationService {
   // User Management Methods
   // -----------------------
 
+  // Update Password
+Future<void> updatePassword(String userId, String newPassword) async {
+  // Hash the new password
+  final hashedPassword = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+
+  // Update the user's password in the database
+  final response = await client
+      .from('users')
+      .update({'password': hashedPassword})
+      .eq('id', userId);
+
+  if (response.error != null) {
+    throw AuthException('Failed to update password: ${response.error!.message}');
+  }
+}
+
   // Get the current user's ID
   String? getCurrentUserId() {
     return client.auth.currentUser?.id;
