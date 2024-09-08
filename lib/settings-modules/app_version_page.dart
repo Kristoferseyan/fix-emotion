@@ -10,6 +10,7 @@ class AppVersionPage extends StatefulWidget {
 class _AppVersionPageState extends State<AppVersionPage> {
   List<dynamic> _releases = [];
   bool _isLoading = true;
+  bool _tokenError = false;
 
   // Replace with your personal access token
   final String personalAccessToken = 'YOUR_PERSONAL_ACCESS_TOKEN';
@@ -27,18 +28,32 @@ class _AppVersionPageState extends State<AppVersionPage> {
       'Authorization': 'token $personalAccessToken',
     };
 
-    final response = await http.get(Uri.parse(url), headers: headers);
+    try {
+      final response = await http.get(Uri.parse(url), headers: headers);
 
-    if (response.statusCode == 200) {
+      if (response.statusCode == 200) {
+        setState(() {
+          _releases = json.decode(response.body);
+          _isLoading = false;
+          _tokenError = false;
+        });
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        setState(() {
+          _isLoading = false;
+          _tokenError = true; // Set error flag to true
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        throw Exception('Failed to load releases');
+      }
+    } catch (e) {
       setState(() {
-        _releases = json.decode(response.body);
         _isLoading = false;
+        _tokenError = true; // Set error flag to true in case of an exception
       });
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-      throw Exception('Failed to load releases');
+      print('Error fetching releases: $e');
     }
   }
 
@@ -54,74 +69,85 @@ class _AppVersionPageState extends State<AppVersionPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _releases.length,
-              itemBuilder: (context, index) {
-                final release = _releases[index];
-                return Card(
-                  elevation: 5,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  color: isDarkMode
-                      ? const Color(0xFF1D4D4F) // Dark mode card color
-                      : const Color(0xFFFFFFFF), // Light mode card color
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      dividerColor: Colors.transparent, // Hide the divider line
+          : _tokenError
+              ? Center(
+                  child: Text(
+                    'Access token is invalid or expired. Please update the token.',
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black,
+                      fontSize: 16,
                     ),
-                    child: ExpansionTile(
-                      collapsedIconColor: isDarkMode ? Colors.white : const Color(0xFF317B85),
-                      iconColor: isDarkMode ? Colors.white : const Color(0xFF317B85),
-                      title: Text(
-                        release['name'] ?? 'Unnamed Release',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : const Color(0xFF317B85),
-                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  itemCount: _releases.length,
+                  itemBuilder: (context, index) {
+                    final release = _releases[index];
+                    return Card(
+                      elevation: 5,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      color: isDarkMode
+                          ? const Color(0xFF1D4D4F) // Dark mode card color
+                          : const Color(0xFFFFFFFF), // Light mode card color
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      backgroundColor: isDarkMode
-                          ? const Color(0xFF284A4F) // Dark mode expanded background
-                          : const Color(0xFFFAFAFA), // Light mode expanded background
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          decoration: BoxDecoration(
-                            color: isDarkMode
-                                ? const Color(0xFF284A4F) // Expanded container dark color
-                                : const Color(0xFFFAFAFA), // Expanded container light color
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(12),
-                              bottomRight: Radius.circular(12),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          dividerColor: Colors.transparent, // Hide the divider line
+                        ),
+                        child: ExpansionTile(
+                          collapsedIconColor: isDarkMode ? Colors.white : const Color(0xFF317B85),
+                          iconColor: isDarkMode ? Colors.white : const Color(0xFF317B85),
+                          title: Text(
+                            release['name'] ?? 'Unnamed Release',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? Colors.white : const Color(0xFF317B85),
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Published on: ${release['published_at'] != null ? DateTime.parse(release['published_at']).toLocal().toString() : 'Unknown'}',
-                                style: TextStyle(
-                                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                          backgroundColor: isDarkMode
+                              ? const Color(0xFF284A4F) // Dark mode expanded background
+                              : const Color(0xFFFAFAFA), // Light mode expanded background
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              decoration: BoxDecoration(
+                                color: isDarkMode
+                                    ? const Color(0xFF284A4F) // Expanded container dark color
+                                    : const Color(0xFFFAFAFA), // Expanded container light color
+                                borderRadius: const BorderRadius.only(
+                                  bottomLeft: Radius.circular(12),
+                                  bottomRight: Radius.circular(12),
                                 ),
                               ),
-                              const SizedBox(height: 5),
-                              Text(
-                                release['body'] ?? 'No release notes',
-                                style: TextStyle(
-                                  color: isDarkMode ? Colors.white54 : const Color(0xFF333333),
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Published on: ${release['published_at'] != null ? DateTime.parse(release['published_at']).toLocal().toString() : 'Unknown'}',
+                                    style: TextStyle(
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    release['body'] ?? 'No release notes',
+                                    style: TextStyle(
+                                      color: isDarkMode ? Colors.white54 : const Color(0xFF333333),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }
