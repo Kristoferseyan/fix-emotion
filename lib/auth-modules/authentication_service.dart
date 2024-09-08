@@ -6,16 +6,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthenticationService {
   final SupabaseClient client = Supabase.instance.client;
 
-  // Authentication Methods
-  // ----------------------
+  // Insert a record of login activity
+  Future<void> logLoginActivity(String userId) async {
+    await client.from('login_activity').insert({
+      'user_id': userId,
+      'login_time': DateTime.now().toIso8601String(),
+    });
+  }
+
+  // Update the last login timestamp for a user and log the activity
+  Future<void> updateLastLogin(String userId) async {
+    await client
+        .from('users')
+        .update({'last_login': DateTime.now().toIso8601String()})
+        .eq('id', userId);
+
+    await logLoginActivity(userId);  // Log the login activity
+  }
 
   // Sign in with Google
   Future<AuthResponse> signInWithGoogle() async {
-    const String webClientId = '668392997039-f3si06im0efivfov2iptpt638uumi4q9.apps.googleusercontent.com';
+    const String webClientId = 'YOUR_GOOGLE_WEB_CLIENT_ID';
 
-    final GoogleSignIn googleSignIn = GoogleSignIn(
-      serverClientId: webClientId,
-    );
+    final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
 
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
@@ -38,6 +51,7 @@ class AuthenticationService {
 
     if (response.user != null) {
       await saveUserData(response.user!.id, googleUser.displayName, googleUser.email);
+      await updateLastLogin(response.user!.id);  // Update last login timestamp and log activity
     }
 
     return response;
@@ -55,6 +69,7 @@ class AuthenticationService {
       final user = response;
       if (BCrypt.checkpw(password, user['password'])) {
         await saveUserData(user['id'], user['fName'], user['email']);
+        await updateLastLogin(user['id']);  // Update last login timestamp and log activity
         return user;
       } else {
         throw AuthException('Invalid password');
@@ -63,6 +78,7 @@ class AuthenticationService {
       throw AuthException(response['error']?.message ?? 'User not found');
     }
   }
+
 
   // Sign out the user
   Future<void> signOut() async {
