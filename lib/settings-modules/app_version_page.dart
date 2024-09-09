@@ -13,7 +13,7 @@ class _AppVersionPageState extends State<AppVersionPage> {
   bool _tokenError = false;
 
   // Replace with your personal access token
-  final String personalAccessToken = 'YOUR_PERSONAL_ACCESS_TOKEN';
+  final String personalAccessToken = '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';
 
   @override
   void initState() {
