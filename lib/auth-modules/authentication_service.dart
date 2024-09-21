@@ -25,15 +25,15 @@ class AuthenticationService {
   }
 
   // Sign in with Username or Email and Password
-// Sign in with Username or Email and Password
 Future<Map<String, dynamic>?> signInWithUsernameOrEmailAndPassword(String input, String password) async {
   try {
+    // Fetch the user with the input (email/username)
     var response = await client
-        .from('user_admin') 
+        .from('user_admin')
         .select()
         .or('email.eq.$input,username.eq.$input')
         .limit(1)
-        .single();  
+        .single();
 
     if (response == null) {
       throw AuthException('User not found with this email or username');
@@ -43,22 +43,15 @@ Future<Map<String, dynamic>?> signInWithUsernameOrEmailAndPassword(String input,
 
     if (BCrypt.checkpw(password, user['password'])) {
       await saveUserData(user['id'], user['fname'] ?? user['username'], user['email']);
-      
-      await updateLastLogin(user['id'], 'user_admin');
-
+      await updateLastLogin(user['id'], 'user_admin');  
       return user;
     } else {
       throw AuthException('Invalid password');
     }
   } catch (error) {
-    if (error is PostgrestException && error.code == 'PGRST116') {
-      throw AuthException('No matching user found or multiple results returned');
-    } else {
-      throw AuthException('Unexpected error: $error');
-    }
+    throw AuthException('Unexpected error: $error');
   }
 }
-
 
 
 
