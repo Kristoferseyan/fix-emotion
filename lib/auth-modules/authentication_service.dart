@@ -15,20 +15,61 @@ class AuthenticationService {
   }
 
   // Update the last login timestamp for a user and log the activity
-  Future<void> updateLastLogin(String userId) async {
+  Future<void> updateLastLogin(String userId, String tableName) async {
     await client
-        .from('users')
+        .from(tableName)  // Can be 'users' or 'admin_users'
         .update({'last_login': DateTime.now().toIso8601String()})
         .eq('id', userId);
 
     await logLoginActivity(userId);  // Log the login activity
   }
 
-  // Sign in with Google
-  Future<AuthResponse> signInWithGoogle() async {
-    const String webClientId = 'YOUR_GOOGLE_WEB_CLIENT_ID';
+  // Sign in with Username or Email and Password
+// Sign in with Username or Email and Password
+Future<Map<String, dynamic>?> signInWithUsernameOrEmailAndPassword(String input, String password) async {
+  try {
+    var response = await client
+        .from('user_admin') 
+        .select()
+        .or('email.eq.$input,username.eq.$input')
+        .limit(1)
+        .single();  
 
-    final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
+    if (response == null) {
+      throw AuthException('User not found with this email or username');
+    }
+
+    final user = response;
+
+    if (BCrypt.checkpw(password, user['password'])) {
+      await saveUserData(user['id'], user['fname'] ?? user['username'], user['email']);
+      
+      await updateLastLogin(user['id'], 'user_admin');
+
+      return user;
+    } else {
+      throw AuthException('Invalid password');
+    }
+  } catch (error) {
+    if (error is PostgrestException && error.code == 'PGRST116') {
+      throw AuthException('No matching user found or multiple results returned');
+    } else {
+      throw AuthException('Unexpected error: $error');
+    }
+  }
+}
+
+
+
+
+
+   // Sign in with Google
+  Future<AuthResponse> signInWithGoogle() async {
+    const String webClientId = '668392997039-f3si06im0efivfov2iptpt638uumi4q9.apps.googleusercontent.com';
+
+    final GoogleSignIn googleSignIn = GoogleSignIn(
+      serverClientId: webClientId,
+    );
 
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
@@ -51,32 +92,9 @@ class AuthenticationService {
 
     if (response.user != null) {
       await saveUserData(response.user!.id, googleUser.displayName, googleUser.email);
-      await updateLastLogin(response.user!.id);  // Update last login timestamp and log activity
     }
 
     return response;
-  }
-
-  // Sign in with Username and Password
-  Future<Map<String, dynamic>?> signInWithUsernameAndPassword(String username, String password) async {
-    final response = await client
-        .from('users')
-        .select()
-        .eq('username', username)
-        .single();
-
-    if (response['error'] == null && response.isNotEmpty) {
-      final user = response;
-      if (BCrypt.checkpw(password, user['password'])) {
-        await saveUserData(user['id'], user['fName'], user['email']);
-        await updateLastLogin(user['id']);  // Update last login timestamp and log activity
-        return user;
-      } else {
-        throw AuthException('Invalid password');
-      }
-    } else {
-      throw AuthException(response['error']?.message ?? 'User not found');
-    }
   }
 
 
@@ -91,20 +109,20 @@ class AuthenticationService {
   // -----------------------
 
   // Update Password
-Future<void> updatePassword(String userId, String newPassword) async {
-  // Hash the new password
-  final hashedPassword = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+  Future<void> updatePassword(String userId, String newPassword, String tableName) async {
+    // Hash the new password
+    final hashedPassword = BCrypt.hashpw(newPassword, BCrypt.gensalt());
 
-  // Update the user's password in the database
-  final response = await client
-      .from('users')
-      .update({'password': hashedPassword})
-      .eq('id', userId);
+    // Update the user's password in the appropriate table
+    final response = await client
+        .from(tableName)  // Either 'users' or 'admin_users'
+        .update({'password': hashedPassword})
+        .eq('id', userId);
 
-  if (response.error != null) {
-    throw AuthException('Failed to update password: ${response.error!.message}');
+    if (response.error != null) {
+      throw AuthException('Failed to update password: ${response.error!.message}');
+    }
   }
-}
 
   // Get the current user's ID
   String? getCurrentUserId() {
@@ -112,11 +130,11 @@ Future<void> updatePassword(String userId, String newPassword) async {
   }
 
   // Delete the user's account
-  Future<void> deleteUser() async {
+  Future<void> deleteUser(String tableName) async {
     final userId = getCurrentUserId();
     if (userId != null) {
       final response = await client
-          .from('users')
+          .from(tableName)  // Either 'users' or 'admin_users'
           .delete()
           .eq('id', userId);
 
